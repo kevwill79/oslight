@@ -109,6 +109,11 @@ struct thread {
 	bool t_did_reserve_buffers;	/* reserve_buffers() in effect */
 
 	/* add more here as needed */
+	bool t_done;
+	struct thread *t_child;
+	struct thread *t_parent;
+	struct lock *t_join_lock;
+	struct cv *parent_wakeup_cv;
 };
 
 /*
@@ -160,6 +165,7 @@ __DEAD void thread_exit(void);
  */
 void thread_yield(void);
 
+void thread_join(void);
 /*
  * Reshuffle the run queue. Called from the timer interrupt.
  */
@@ -171,5 +177,7 @@ void schedule(void);
  */
 void thread_consider_migration(void);
 
+
+//*******************************
 
 #endif /* _THREAD_H_ */

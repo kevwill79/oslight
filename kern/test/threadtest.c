@@ -144,3 +144,17 @@ threadtest2(int nargs, char **args)
 
 	return 0;
 }
+
+int
+threadJoin(int nargs, char **args)
+{
+	(void)nargs;
+	(void)args;
+	init_sem();
+	kprintf("\nStarting thread join test...\n");
+	runthreads(0);
+	thread_join();
+	kprintf("Thread join test done.\n");
+
+	return 0;
+}

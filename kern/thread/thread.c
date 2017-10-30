@@ -150,6 +150,10 @@ thread_create(const char *name)
 	thread->t_did_reserve_buffers = false;
 
 	/* If you add to struct thread, be sure to initialize here */
+	thread -> t_child = NULL;
+	thread -> t_parent = NULL;
+	thread -> t_join_lock = NULL;
+	thread -> parent_wakeup_cv = NULL;
 
 	return thread;
 }
@@ -523,6 +527,13 @@ thread_fork(const char *name,
 	/* Thread subsystem fields */
 	newthread->t_cpu = curthread->t_cpu;
 
+
+//****************************************************
+	curthread -> t_child = newthread;
+	newthread -> t_parent = curthread;
+	newthread -> t_parent -> t_done = false;
+//****************************************************
+
 	/* Attach the new thread to its process */
 	if (proc == NULL) {
 		proc = curthread->t_proc;
@@ -543,6 +554,16 @@ thread_fork(const char *name,
 
 	/* Set up the switchframe so entrypoint() gets called */
 	switchframe_init(newthread, entrypoint, data1, data2);
+
+
+
+	//***********************************************
+	curthread -> t_child = newthread;
+	newthread -> t_parent = curthread;
+
+	curthread -> t_join_lock = lock_create("Join Lock");
+	curthread -> parent_wakeup_cv = cv_create("Join CV");
+
 
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
@@ -799,6 +820,15 @@ thread_exit(void)
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
 
+	if(cur -> t_parent != NULL)
+	{
+		lock_acquire(cur -> t_parent -> t_join_lock);
+		cur -> t_parent -> t_child = NULL;
+		cv_signal(cur -> t_parent -> parent_wakeup_cv, cur -> t_parent -> t_join_lock);
+		lock_release(cur -> t_parent -> t_join_lock);
+	}
+
+
 	/* Interrupts off on this processor */
         splhigh();
 	thread_switch(S_ZOMBIE, NULL, NULL);
@@ -814,6 +844,21 @@ thread_yield(void)
 	thread_switch(S_READY, NULL, NULL);
 }
 
+
+void
+thread_join(void)
+{
+	//Acquire lock
+	lock_acquire(curthread -> t_join_lock);
+	
+	while(curthread -> t_child != NULL)
+	{
+		//Wait on the CV status change
+		cv_wait(curthread -> parent_wakeup_cv, curthread -> t_join_lock);
+	}
+
+	lock_release(curthread -> t_join_lock);
+}
 ////////////////////////////////////////////////////////////
 
 /*
